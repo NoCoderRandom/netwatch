@@ -127,11 +127,69 @@ Analysis performed 2026-04-04. These are the remaining improvements:
 
 ### How to use the new prompts
 ```
-prompts/01_identity_eol_bridge.txt        → Connect identification to EOL checking
-prompts/02_version_detection_expansion.txt → Better version extraction + SNMP + scan profiles
-prompts/03_ui_readme_polish.txt           → Interactive menu + README + console UX
+prompts/01_identity_eol_bridge.txt        → Connect identification to EOL checking   ✓ DONE
+prompts/02_version_detection_expansion.txt → Better version extraction + SNMP + scan profiles  ✓ DONE
+prompts/03_ui_readme_polish.txt           → Interactive menu + README + console UX   ✓ DONE
 ```
-Each prompt is ~70% of a session. Do them in order.
+
+---
+
+## Session — 2026-04-04 (Part 3): Prompts 02 + 03 + Masscan Hardening
+
+### What was done
+
+Executed prompts 02 and 03 in sequence, then hardened the masscan integration.
+
+### Prompt 02: Version Detection Expansion
+
+| Area | Change |
+|------|--------|
+| **QUICK scan profile** | Added `-sV --version-intensity 2` — every default scan now gets service version data |
+| **SNMP sysDescr patterns** | Expanded 15 → 25: added FortiOS, WatchGuard Fireware, SonicOS, ArubaOS, Huawei VRP, HP iLO, Dell iDRAC, TrueNAS, OPNsense, Windows Server |
+| **Product map** | Added 11 PRODUCT_MAP entries + 5 NOT_TRACKED entries for new SNMP slugs |
+| **SSH banner → CVE pipeline** | `_run_cve_checks()` now extracts OpenSSH/dropbear versions from SSH banners and runs CVE lookups |
+| **HTTP fingerprint → CVE pipeline** | `_run_cve_checks()` now checks `raw_headers["Server"]` for product/version (e.g. `Apache/2.4.29`) |
+| **SSH banner OS hint** | Device identifier returns low-confidence (0.15) Ubuntu release hints from SSH package revision suffix |
+
+### Prompt 03: UI + README + Console Polish
+
+| Area | Change |
+|------|--------|
+| **Display refactor** | Moved `_print_device_id_table()` to `Display.show_device_inventory()` — shared by netwatch.py and interactive controller |
+| **Interactive menu** | Added `[8] Device Inventory` option with `_run_device_inventory()` handler |
+| **Scan summary stats** | `calculate_stats()` now includes `devices_identified`, `devices_total`, `device_types` Counter |
+| **Summary panel** | `show_summary()` displays "Devices identified: X/Y (types)" |
+| **Full assessment output** | Device identification summary shown between finding counts and risk scores |
+| **Console formatting** | Per-host identity labels truncated to 50 chars; table truncates model (20) and version (12); empty table shows warning |
+| **`--identify` summary** | Now shows type breakdown: "8 devices identified (3 routers, 2 NAS, ...)" |
+| **README** | Added `### Device Identification` feature summary, `--identify` CLI flag, `## Device Identification` detailed section with evidence source table |
+
+### Masscan Integration Hardening
+
+| Area | Change |
+|------|--------|
+| **Root detection** | `_masscan_available()` now checks `os.geteuid() == 0` — masscan disabled without root, no wasted time |
+| **Profile-specific ports** | New `_extract_profile_ports()` — IOT/SMB profiles pass their port lists to masscan instead of scanning 1-65535 |
+| **`-p` conflict fix** | New `_build_nmap_args()` static method strips existing `-p` and `-F` before injecting masscan-discovered ports |
+| **Progress feedback** | masscan phase now calls progress callback ("masscan port discovery..." 5%, result count 15%, per-host nmap progress) |
+| **stderr logging** | Non-zero masscan exit codes log first stderr line as warning |
+| **Timestamps** | Parallel `ScanResult` now has proper `start_time`, `end_time`, `duration` |
+
+### Files modified
+| File | Change |
+|------|--------|
+| `config/settings.py` | QUICK profile: `-sV --version-intensity 2`, updated description |
+| `core/snmp_checker.py` | 10 new sysDescr patterns (25 total) |
+| `core/device_identifier.py` | SSH banner returns list with Ubuntu version hint |
+| `core/port_scanner.py` | Root check, profile-port extraction, `-p` conflict fix, progress, stderr, timestamps |
+| `eol/product_map.py` | 11 new PRODUCT_MAP + 5 NOT_TRACKED entries |
+| `netwatch.py` | `import re`, SSH/HTTP CVE pipelines, device stats in calculate_stats and full assessment, display delegation, identity truncation |
+| `ui/display.py` | `show_device_inventory()` method, device stats in `show_summary()` |
+| `ui/interactive_controller.py` | `[8] Device Inventory` menu option + handler |
+| `README.md` | Device identification docs, `--identify` flag, evidence table, QUICK profile update |
+
+### Tested — all scan profiles verified
+Both 192.168.1.0/24 and 192.168.50.0/24 tested with PING, QUICK, FULL, STEALTH, IOT, SMB, `--identify`, and `--full-assessment`. All passed.
 
 ### Version
-All changes are on top of v1.7.0 (commit 80adc71). Not yet committed.
+All changes on top of v1.7.0 (commit 3d67efd). Ready to commit.
